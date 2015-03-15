@@ -1,0 +1,216 @@
+---------
+
+name: Classifying movie reviews with naive bayes
+description: Classify movie reviews according to positive or negative sentiment using naive bayes.
+author: Vik Paruchuri
+prerequisites: []
+language: python
+premium: False
+under_construction: False
+file_list: ['test.csv', 'train.csv']
+mission_number: 2
+mode: singlescreen
+vars:
+  1: |
+    import re
+    from collections import Counter
+    def make_class_prediction(text, counts, class_prob, class_count):
+        prediction = 1
+        text_counts = Counter(re.split("\s+", text))
+        for word in text_counts:
+            # For every word in the text, we get the number of times that word occured in the reviews for a given class, add 1 to smooth the value, and divide by the total number of words in the class (plus the class_count to also smooth the denominator).
+            # Smoothing ensures that we don't multiply the prediction by 0.
+            prediction *=  text_counts.get(word) * ((counts.get(word, 0) + 1) / (sum(counts.values()) + class_count))
+        # Now we multipy by the probability of the class existing in the documents.
+        return prediction * class_prob
+
+---------
+
+name: Before we classify
+type: code
+left_text: |
+  We have a csv file containing movie reviews.  Each row in the dataset contains the text of the review, and whether the tone of the review was classified as positive(`1`), or negative(`-1`).
+
+  Our goal is to train our algorithm using the data in `train.csv`, and then make predictions on the data in `test.csv`.  We'll then be able to calculate our error, and see how good our predictions were.
+
+  For our classification algorithm, we're going to use [naive bayes](http://en.wikipedia.org/wiki/Naive_Bayes_classifier).  A naive bayes classifier works by figuring out the probability of different attributes of the data being associated with a certain class.  This is based on [bayes' theorem](http://en.wikipedia.org/wiki/Bayes%27_theorem).  The theorem is $$P(A \mid B) = \frac{P(B \mid A) \, P(A)}{P(B)}$$.  This basically states "the probability of A given that B is true equals the probability of B given that A is true times the probability of A being true, divided by the probability of B being true."
+
+  Let's do a quick exercise to understand this rule better.
+initial_display: |
+  # Here's a running history for the past week.
+  # It contains whether or not the person ran, and whether or not they were tired.
+  days = [
+      ["ran", "was tired"],
+      ["ran", "was not tired"],
+      ["didn't run", "was tired"],
+      ["ran", "was tired"],
+      ["didn't run", "was not tired"],
+      ["ran", "was not tired"],
+      ["ran", "was tired"]
+  ]
+
+  # Let's say we want to calculate the odds that someone was tired given that they ran, using bayes' theorem.
+  # This is P(A).
+  prob_tired = len([d for d in days if d[1] == "was tired"]) / len(days)
+  # This is P(B).
+  prob_ran = len([d for d in days if d[0] == "ran"]) / len(days)
+  # This is P(B|A).
+  prob_ran_given_tired = len([d for d in days if d[0] == "ran" and d[1] == "was tired"]) / len([d for d in days if d[1] == "was tired"])
+
+  # Now we can calculate P(A|B).
+  prob_tired_given_ran = (prob_ran_given_tired * prob_tired) / prob_ran
+
+  print("Probability of being tired given that you ran: {0}".format(prob_tired_given_ran))
+no_answer_needed: True
+
+--------
+
+name: Calculating word counts
+type: code
+left_text: |
+  But what if instead of just one data point, we have many?  Naive bayes extends bayes' theorem to handle this case by assuming that each data point is independent.
+
+  In this case, the formula looks like this: $$P(y \mid x_1, \dots, x_n) = \frac{P(y) \prod_{i=1}^{n} P(x_i \mid y)}{P(x_1, \dots, x_n)}$$.  This is saying "the probability that classification y is correct given the features $$x_1$$, $$x_2$$, and so on equals the probability of y times the product of each x feature given y, divided by the probability of the x features".
+
+  We can ignore the denominator because it will be a constant in each of the possible classes, thus cancelling out.  So we have to calculate the probabilities of each classification, and the probabilities of each feature falling into each classification.
+
+  Because we're working with text, a natural unit for a "feature" is a word.  We'll split our text on whitespace to get these.
+initial_display: |
+  # A nice class that lets you count how many times items occur in a list
+  from collections import Counter
+  import csv
+  import re
+
+  # Read in the training data.
+  with open("train.csv", 'r') as file:
+      reviews = list(csv.reader(file))
+
+  def get_text(reviews, score):
+      # Join together the text in the reviews for a particular tone.
+      # We lowercase to avoid "Not" and "not" being seen as different words, for example.
+      return " ".join([r[0].lower() for r in reviews if r[1] == str(score)])
+
+  def count_text(text):
+      # Split text into words based on whitespace.  Simple but effective.
+      words = re.split("\s+", text)
+      # Count up the occurence of each word.
+      return Counter(words)
+
+  negative_text = get_text(reviews, -1)
+  positive_text = get_text(reviews, 1)
+  # Generate word counts for negative tone.
+  negative_counts = count_text(negative_text)
+  # Generate word counts for positive tone.
+  positive_counts = count_text(positive_text)
+
+  print("Negative text sample: {0}".format(negative_text[:100]))
+  print("Positive text sample: {0}".format(positive_text[:100]))
+no_answer_needed: True
+
+--------
+
+name: Making predictions
+type: code
+left_text: |
+  Now that we have the word counts, we just have to convert them to probabilities and multiply them out to get the predicted classification.  Let's say we wanted to find the probability that `Didn't like it` expresses a negative sentiment.  We would find the total number of times the word `didn't` occured in the negative reviews, and divide it by the total number of words in the negative reviews to get the class-conditional probability.  We would them do the same for `like` and `it`.  We would multiply out those three probabilities, and then multiply by the probability of any document expressing a negative sentiment.
+
+  To do this, we'll need to compute the probabilities of each class occuring in the data, and then make a function to compute the classification.
+initial_display: |
+  import re
+  from collections import Counter
+
+  def get_count(score):
+      # Compute the count of each classification occuring in the data.
+      return len([r for r in reviews if r[1] == str(score)])
+
+  # We need these counts to use for smoothing when computing the prediction.
+  positive_review_count = get_count(1)
+  negative_review_count = get_count(-1)
+
+  # These are the class probabilities.
+  prob_positive = positive_review_count / len(reviews)
+  prob_negative = negative_review_count / len(reviews)
+
+
+  def make_class_prediction(text, counts, class_prob, class_count):
+      prediction = 1
+      text_counts = Counter(re.split("\s+", text))
+      for word in text_counts:
+          # For every word in the text, we get the number of times that word occured in the reviews for a given class, add 1 to smooth the value, and divide by the total number of words in the class (plus the class_count to also smooth the denominator).
+          # Smoothing ensures that we don't multiply the prediction by 0.
+          prediction *=  text_counts.get(word) * ((counts.get(word, 0) + 1) / (sum(counts.values()) + class_count))
+      # Now we multipy by the probability of the class existing in the documents.
+      return prediction * class_prob
+
+  # As you can see, we can now generate probabilities for which class a given review is part of.
+  # The probabilities themselves aren't very useful -- we make our classification decision based on which value is greater.
+  print("Review: {0}".format(reviews[0][0]))
+  print("Negative prediction: {0}".format(make_class_prediction(reviews[0][0], negative_counts, prob_negative, negative_review_count)))
+  print("Positive prediction: {0}".format(make_class_prediction(reviews[0][0], positive_counts, prob_positive, positive_review_count)))
+no_answer_needed: True
+
+--------
+
+name: Predicting the test set
+type: code
+initial_vars: 1
+left_text: |
+  Now that we can make predictions, let's predict the probabilities on the reviews in `test.csv`.  You will get misleadingly good results if you predict on the reviews in `train.csv`, because the probabilities were generated from it (and this, the algorithm has prior knowledge about the data it's predicting on).
+
+  Once we know the predictions, we'll compute error using the area under the [ROC](http://en.wikipedia.org/wiki/Receiver_operating_characteristic#Area_under_curve) curve.
+initial_display: |
+  import csv
+
+  def make_decision(text, make_class_prediction):
+      # Compute the negative and positive probabilities.
+      negative_prediction = make_class_prediction(text, negative_counts, prob_negative, negative_review_count)
+      positive_prediction = make_class_prediction(text, positive_counts, prob_positive, positive_review_count)
+
+      # We assign a classification based on which probability is greater.
+      if negative_prediction > positive_prediction:
+        return -1
+      return 1
+
+  with open("test.csv", 'r') as file:
+      test = list(csv.reader(file))
+
+  predictions = [make_decision(r[0], make_class_prediction) for r in test]
+  actual = [int(r[1]) for r in test]
+
+  from sklearn import metrics
+
+  # Generate the roc curve using scikits-learn.
+  fpr, tpr, thresholds = metrics.roc_curve(actual, predictions, pos_label=1)
+  # Measure the area under the curve.  The closer to 1, the "better" the predictions.
+  print(metrics.auc(fpr, tpr))
+no_answer_needed: True
+
+--------
+
+name: A faster way to predict
+type: code
+initial_vars: 1
+left_text: |
+  There are a lot of extensions that we could make to this algorithm to make it perform better.  We could look at [n-grams](http://en.wikipedia.org/wiki/N-gram) instead of unigrams.  We could remove punctuation and other non-characters.  We could remove [stopwords](http://en.wikipedia.org/wiki/Stop_words).  We could also perform [stemming](http://en.wikipedia.org/wiki/Stemming) or lemmatization.
+
+  We don't want to have to code the whole algorithm out every time, though.  An easier way to use naive bayes is to use the implementation in scikit-learn.
+initial_display: |
+  from sklearn.naive_bayes import MultinomialNB
+  from sklearn.feature_extraction.text import CountVectorizer
+  from sklearn import metrics
+
+  # Generate counts from text using a vectorizer.  There are other vectorizers available, and lots of options you can set.
+  vectorizer = CountVectorizer(stop_words='english')
+  train_features = vectorizer.fit_transform([r[0] for r in reviews])
+  test_features = vectorizer.transform([r[0] for r in test])
+
+  # Fit a naive bayes model to the training data, then predict on the test data.
+  nb = MultinomialNB()
+  predictions = nb.fit(train_features, [int(r[1]) for r in reviews]).predict(test_features)
+
+  # Compute the error.  It is slightly different because the internals of this process work differently from our implementation.
+  fpr, tpr, thresholds = metrics.roc_curve(actual, predictions, pos_label=1)
+  print(metrics.auc(fpr, tpr))
+no_answer_needed: True
+
+--------
