@@ -2,7 +2,7 @@
 
 name: Probability mass functions
 description: Learn about probability mass functions while analyzing data on pregnancies.
-author: Author
+author: Vik Paruchuri
 file_list: ["births.csv"]
 mission_number: 4
 mode: singlescreen
@@ -92,6 +92,8 @@ left_text: |
   * `birthwgt_lb1` -- the pounds portion of the birth weight.
   * `birthwgt_oz1` -- the ounces portion of the birth weight.
   * `agepreg` -- the mother's age at the end of the pregnancy, in years.
+  
+  This lesson is based on Chapter 3 of [Think Stats, 2nd edition](http://www.thinkstats2.com), by Allen Downey.
 initial_display: |
   # Read in all of the birth data
   import pandas

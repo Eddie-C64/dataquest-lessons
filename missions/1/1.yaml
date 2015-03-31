@@ -147,7 +147,6 @@ initial_display: |
   # You can see the plot by clicking "plots" to the bottom right
   plt.scatter(x=plot_columns[:,0], y=plot_columns[:,1], c=votes["label"])
   plt.show()
-  plt.clf()
 instructions: |
   Hit "Next" to keep going.
 answer: |

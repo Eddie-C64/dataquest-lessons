@@ -2,7 +2,7 @@
 
 name: Using Counters
 description: This lesson demonstrates the use of the Counter class to implement Multisets, PMFs, and suites of Bayesian hypotheses.
-author: Author
+author: Vik Paruchuri
 file_list: []
 mission_number: 3
 mode: singlescreen
@@ -848,6 +848,8 @@ type: code
 no_answer_needed: True
 left_text: |
   A counter is a map from values to their frequencies.  If you initialize a counter with a string, you get a map from each letter to the number of times it appears.  If two words are anagrams, they yield equal Counters, so you can use Counters to test anagrams in linear time.
+  
+  This lesson is based on an [ipython notebook](https://github.com/AllenDowney/PythonCounterPmf) by Allen Downey.
 initial_display: |
   def is_anagram(word1, word2):
       """Checks whether the words are anagrams.
