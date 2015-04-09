@@ -1,0 +1,110 @@
+--------
+
+name: K-nearest neighbors introduction
+description: Use the knn algorithm to predict NBA statistics.
+author: Vik Paruchuri
+file_list: ["nba_2013.csv"]
+mission_number: 6
+mode: singlescreen
+vars:
+  1: |
+    
+  2: |
+    import pandas
+    # Fill in any NA values without the student knowing.
+    nba.fillna(0, inplace=True)
+
+--------
+
+name: A look at the data
+type: code
+no_answer_needed: True
+left_text: |
+  Before we get started with plotting, let's take a look at our data.  Each row in the data contains information on how a player performed in the 2013-2014 NBA season.
+  
+  Here are some selected columns:
+  
+  * `player` -- name of the player
+  * `pos` -- the position of the player
+  * `g` -- number of games the player was in
+  * `gs` -- number of games the player started
+  * `pts` -- total points the player scored
+  
+  See [this site](http://www.databasebasketball.com/about/aboutstats.htm) for an explanation of the rest of them.
+initial_display: |
+  import pandas
+  with open("nba_2013.csv", 'r') as csvfile:
+      nba = pandas.read_csv(csvfile)
+  
+  # The names of the columns in the data.
+  print(nba.columns.values)
+initial_vars: 1
+
+--------
+
+name: KNN overview
+type: text
+no_answer_needed: True
+text: |
+  The k-nearest neighbors is based around the simple idea of predicting unknown values by matching them with the most similar known values.
+  
+  Let's say that we have 3 different types of cars:
+  
+  ```
+  car,horsepower,racing_stripes,is_fast
+  Honda Accord,180,False,False
+  Yugo,500,True,True
+  Delorean DMC-12,200,True,True
+  ```
+  
+  Let's say that we now have another car:
+  
+  ```
+  Chevrolet Camaro,400,True,Unknown
+  ```
+  
+  We don't know whether or not this car is fast.  In order to predict if it is, we find the most similar known car.  In this case, we would compare the `horsepower` and `racing_stripes` values to find the most similar car, which is the `Yugo`.  Since the Yugo is fast, we would predict that the Camaro is also fast.  This is an example of 1-nearest neighbors -- we only looked at the most similar car.
+  
+  If we performed a 2-nearest neighbors, we would end up with 2 `True` values (for the Delorean and the Yugo), which would average out to `True`.
+  
+  If we did 3-nearest neighbors, we would end up with 2 `True` values and a `False` value, which would average out to `True`.
+  
+  There are some individual steps in the process that we'll look at in more detail.
+
+--------
+
+name: Euclidean distance
+type: code
+check_vars: ["lebron_distance"]
+left_text: |
+  Before we can predict using KNN, we need to find some way to figure out which data rows are "closest" to the row we're trying to predict on.
+  
+  A simple way to do this is to use Euclidean distance.  The formula is $$\sqrt{(q_1-p_1)^2 + (q_2-p_2)^2 + \cdots + (q_n-p_n)^2}$$
+  
+  Let's say we have these two rows (True/False has been converted to 1/0), and we want to find the distance between them:
+  
+  ```
+  Honda Accord,180,0
+  Chevrolet Camaro,400,1
+  ```
+  
+  We would first only select the numeric columns.  Then the distance becomes $$\sqrt{(180-400)^2 + (0-1)^2}$$, which is about equal to `220`.
+initial_display: |
+  selected_player = nba[nba["player"] == "LeBron James"].iloc[0]
+  distance_columns = ['age', 'g', 'gs', 'mp', 'fg', 'fga', 'fg.', 'x3p', 'x3pa', 'x3p.', 'x2p', 'x2pa', 'x2p.', 'efg.', 'ft', 'fta', 'ft.', 'orb', 'drb', 'trb', 'ast', 'stl', 'blk', 'tov', 'pf', 'pts']
+answer: |
+  import math
+  def euclidean_distance(row):
+      inner_value = 0
+      for k in distance_columns:
+          inner_value += (row[k] - selected_player[k]) ** 2
+      return math.sqrt(inner_value)
+  
+  lebron_distance = nba.apply(euclidean_distance, axis=1)
+instructions: |
+  Make a function for calculating the euclidean distance between two pandas series.  Use the function to find the euclidean distance between `selected_player` and each row in `nba`.  Use the `.apply(func, axis=1)` method on dataframes to apply function `func` to each row.  The function should take `row` as its first argument.  Only use the columns in `distance_columns` to compute the distance.  [Here's](http://pandas.pydata.org/pandas-docs/dev/generated/pandas.DataFrame.apply.html) more on the method.
+  
+  Assign the resulting pandas series to `lebron_distance`.
+initial_vars: 2
+
+--------
