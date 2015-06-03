@@ -174,6 +174,7 @@ vars:
     import re
     
     
+    features = numpy.hstack([non_nlp, meta, chi_matrix.todense()])
   9: |
     import pandas
     submissions = pandas.read_csv("hn_stories.csv")
@@ -202,6 +203,7 @@ vars:
     import re
     
     
+    features = numpy.hstack([non_nlp, meta, chi_matrix.todense()])
     from sklearn.linear_model import Ridge
     import numpy
     import random
@@ -212,14 +214,14 @@ name: Looking at the data
 type: markdown
 no_answer_needed: True
 left_text: |
-  We'll be looking at a dataset consisting of submissions to [hacker news](http://news.ycombinator.com) from 2006 to 2015.  The data was taken from [here](https://github.com/arnauddri/hn) where Arnaud Drizard used the Hacker News API to scrape it.  We've sampled `100000` rows from the data randomly, and removed all the extraneous columns.  We only have four columns:
+  We'll be looking at a dataset consisting of submissions to [Hacker News](http://news.ycombinator.com) from 2006 to 2015.  The data was taken from [here](https://github.com/arnauddri/hn).  Arnaud Drizard used the Hacker News API to scrape it.  We've sampled `30000` rows from the data randomly, and removed all the extraneous columns.  Our data only has four columns:
   
   * `submission_time` -- when the story was submitted.
   * `url` -- the base url of the submission.
   * `upvotes` -- number of upvotes the submission got.
   * `headline` -- the headline of the submission.
   
-  We'll be using the headline to predict number of upvotes.  The data is stored in the `submissions` variable.
+  We'll be using the headlines to predict the number of upvotes.  The data is stored in the `submissions` variable.
 
 --------
 
@@ -227,11 +229,13 @@ name: First steps
 type: code
 no_answer_needed: True
 left_text: |
-  We want to eventually train an algorithm that can be passed in a headline, and tell us how many upvotes it would get.  However, these algorithms only understand numbers, not words.  How do we translate our headlines into something a machine can understand?
+  We want to eventually train a machine learning algorithm to take in a headline and tell us how many upvotes it would receive.  However, machine learning algorithms only understand numbers, not words.  How do we translate our headlines into something an algorithm can understand?
   
   The first step is to create something called a bag of words matrix.  A bag of word matrix gives us a numerical representation of which words are in which headlines.
   
-  In order to construct a bag of words matrix, we find the unique words across the whole set of headlines.  Then, we setup a matrix where each row is a headline, and each column is one of the unique words.  Then, we fill in each cell with the number of times that word occured in that headline.
+  In order to construct a bag of words matrix, we first find the unique words across the whole set of headlines.  Then, we setup a matrix where each row is a headline, and each column is one of the unique words.  Then, we fill in each cell with the number of times that word occured in that headline.
+  
+  This will result in a matrix where a lot of the cells have a value of zero, unless the vocabulary is mostly shared between the headlines.
 initial_display: |
   from collections import Counter
   
@@ -266,9 +270,9 @@ name: Removing punctuation
 type: code
 no_answer_needed: True
 left_text: |
-  The matrix we just made is very sparse -- that means that a lot of the values are zero.  To some extent, this is unavoidable, because the headlines are very different and not very long, but we can take some steps to fix it.  Right now `Why` and `why`, and `use` and `use.` are treated as different, only though they aren't.
+  The matrix we just made is very sparse -- that means that a lot of the values are zero.  This is unavoidable to some extent, because the headlines don't have much shared vocabulary. We can take some steps to make the problem better, though.  Right now `Why` and `why`, and `use` and `use.` are treated as different entities, but we know they refer to the same word.
   
-  We can help the parser recognize that these are in fact the same by lowercasing and removing punctuation.
+  We can help the parser recognize that these are in fact the same by lowercasing every word and removing all punctuation.
 initial_display: |
   import re
   
@@ -288,7 +292,7 @@ name: Removing stopwords
 type: code
 no_answer_needed: True
 left_text: |
-  Certain words don't give you much discriminative ability between good and bad headlines.  Words such as `the`, `a`, and `also` occur commonly enough in all contexts that they don't really tell us much about whether something is good or not.
+  Certain words don't help you discriminate between good and bad headlines.  Words such as `the`, `a`, and `also` occur commonly enough in all contexts that they don't really tell us much about whether something is good or not.  They are generally equally likely to appear in both good and bad headlines.
   
   By removing these, we can reduce the size of the matrix, and make training an algorithm faster.
 initial_display: |
@@ -314,7 +318,9 @@ name: Generating a matrix for all the headlines
 type: code
 no_answer_needed: True
 left_text: |
-  Now, we want to make a bag of words matrix for the whole set of headlines.  We don't want to have to code everything out manually every time, so we'll use a class from [scikit-learn](http://scikit-learn.org/stable/) to do it automatically.
+  Now that we know the basics, we can make a bag of words matrix for the whole set of headlines.  
+  
+  We don't want to have to code everything out manually every time, so we'll use a class from [scikit-learn](http://scikit-learn.org/stable/) to do it automatically.  Using the *vectorizers* from scikit-learn to construct your bag of words matrices will make the process much easier and faster.
 initial_display: |
   from sklearn.feature_extraction.text import CountVectorizer
   
@@ -327,8 +333,8 @@ initial_display: |
   # We created our bag of words matrix with far fewer commands.
   print(matrix.todense())
   
-  # Let's apply it to all the headlines for all the submissions.
-  # We'll also add the url to the end of the headline so we can take it into account.
+  # Let's apply the same method to all the headlines in all 100000 submissions.
+  # We'll also add the url of the submission to the end of the headline so we can take it into account.
   submissions['full_test'] = submissions["headline"] + " " + submissions["url"]
   full_matrix = vectorizer.fit_transform(submissions["headline"])
   print(full_matrix.shape)
@@ -340,9 +346,9 @@ name: Reducing dimensionality
 type: code
 no_answer_needed: True
 left_text: |
-  We've constructed a matrix, but it now has `50571` unique words, or columns.  This will take a very long time to make predictions with.  We want to speed it up, so we'll need to cut down on this number somehow.
+  We've constructed a matrix, but it now has `25877` unique words, or columns.  This will take a very long time to make predictions with.  We want to speed it up, so we'll need to cut down the column count somehow.
   
-  One way to do this is to pick a subset of the columns that are the most informative -- that is, differentiate between good and bad headlines the best.  A good way to figure out the most informative columns is to use something called a [chi-squared](http://en.wikipedia.org/wiki/Chi-squared_test) test.  
+  One way to do this is to pick a subset of the columns that are the most informative -- that is, the columns that differentiate between good and bad headlines the best.  A good way to figure out the most informative columns is to use something called a [chi-squared](http://en.wikipedia.org/wiki/Chi-squared_test) test.  
   
   A chi-squared test finds the words that discriminate the most between highly upvoted posts and posts that weren't upvoted.  This can be words that occur a lot in highly upvoted posts, and not at all in posts without upvotes, or words that occur a lot in posts that aren't upvoted, but don't occur in posts that are upvoted.
   
@@ -353,7 +359,7 @@ initial_display: |
   from sklearn.feature_selection import SelectKBest
   from sklearn.feature_selection import chi2
   
-  # Convert the upvotes variable to binary so it works with a chi squared test.
+  # Convert the upvotes variable to binary so it works with a chi-squared test.
   col = submissions["upvotes"].copy(deep=True)
   col_mean = col.mean()
   col[col < col_mean] = 0
@@ -374,7 +380,7 @@ name: Adding meta features
 type: code
 no_answer_needed: True
 left_text: |
-  If we ignore the "meta" features of the text, we're missing out on a lot of good features.  These features are things like length, amount of punctuation, average word length, and other sentence specific features.
+  If we ignore the "meta" features of the headlines we're missing out on a lot of good information.  These features are things like length, amount of punctuation, average word length, and other sentence specific features.
   
   Adding these in can greatly increase prediction accuracy.
   
@@ -397,11 +403,9 @@ initial_display: |
   columns = []
   for func in transform_functions:
       columns.append(submissions["headline"].apply(func))
+      
   # Convert the meta features to a numpy array.
   meta = numpy.asarray(columns).T
-  
-  # Add the meta features to the existing text features.
-  features = numpy.hstack([meta, chi_matrix.todense()])
 initial_vars: 6
 
 --------
@@ -410,7 +414,9 @@ name: Adding in more features
 type: code
 no_answer_needed: True
 left_text: |
-  There are more features we can work with than just text features.  We have two columns, `id`, and `submission_time`, that add additional information.  Often when doing NLP work, you'll be able to add informative outside features that can make your predictions much better.
+  There are more features we can work with than just text features.  We have a column called `submission_time`, that tells us when a story was submitted, and could add more information.  
+  
+  Often when doing NLP work, you'll be able to add outside features that make your predictions much better.  Some machine learning algorithms can figure out how these features interact with your textual features(ie "Posting at midnight with the word 'tacos' in the headline results in a high scoring post").
 initial_display: |
   columns = []
   
@@ -434,7 +440,7 @@ initial_display: |
   non_nlp = numpy.asarray(columns).T
   
   # Concatenate the features together.
-  full_features = numpy.hstack([non_nlp, features])
+  features = numpy.hstack([non_nlp, meta, chi_matrix.todense()])
 initial_vars: 7
 
 --------
@@ -443,30 +449,33 @@ name: Making predictions
 type: code
 no_answer_needed: True
 left_text: |
-  Now that we can translate words to numbers, we can make predictions using an algorithm.  We'll randomly pick `75000` headlines as a training set, and then evaluate the performance of the algorithm on the test set of `25000` headlines.
+  Now that we can translate words to numbers, we can make predictions using an algorithm.  We'll randomly pick `25000` headlines as a training set, and then evaluate the performance of the algorithm on the test set of `5000` headlines.
   
-  For the algorithm, we'll use [ridge regression](http://en.wikipedia.org/wiki/Tikhonov_regularization).  As compared to ordinary linear regression, ridge regression introduces a penalty on the coefficients, which prevents them from becoming too large.  This can help it work with large numbers of predictions (columns), like we have.
+  Predicting the results on the same set that we train on will result in [overfitting](http://en.wikipedia.org/wiki/Overfitting), where your algorithm is overly optimized to the training set -- we'll think that the error rate is good, but it could actually be much higher on new data.
+  
+  For the algorithm, we'll use [ridge regression](http://en.wikipedia.org/wiki/Tikhonov_regularization).  As compared to ordinary linear regression, ridge regression introduces a penalty on the coefficients, which prevents them from becoming too large.  This can help it work with large numbers of predictors (columns) that are correlated to each other, like we have.
 initial_display: |
   from sklearn.linear_model import Ridge
   import numpy
   import random
   
-  train_rows = 75000
+  train_rows = 25000
+  # Set a seed to get the same "random" shuffle every time.
   random.seed(1)
   
-  # Shuffle the indices for the matrix randomly.
+  # Shuffle the indices for the matrix.
   indices = list(range(features.shape[0]))
   random.shuffle(indices)
   
   # Create train and test sets.
-  train = full_features[indices[:train_rows], :]
-  test = full_features[indices[train_rows:], :]
+  train = features[indices[:train_rows], :]
+  test = features[indices[train_rows:], :]
   train_upvotes = submissions["upvotes"].iloc[indices[:train_rows]]
   test_upvotes = submissions["upvotes"].iloc[indices[train_rows:]]
   train = numpy.nan_to_num(train)
   
   # Run the regression and generate predictions for the test set.
-  reg = Ridge(alpha=10)
+  reg = Ridge(alpha=.1)
   reg.fit(train, train_upvotes)
   predictions = reg.predict(test)
 initial_vars: 8
@@ -477,20 +486,20 @@ name: Evaluating error
 type: code
 no_answer_needed: True
 left_text: |
-  We now have predictions, but how do we determine how good they are?  One good way is to calculate the error between the predictions on the test set and the actual upvote counts on the test set.
+  We now have predictions, but how do we determine how good they are?  One way is to calculate the error rate between the predictions on the test set and the actual upvote counts for the test set.
   
-  We'll also want a baseline to compare this to to see if the results are good.  We can do this by using a simple method to make "predictions" for the test set, and comparing the performance of our baseline to that method.  One very simple baseline is an average baseline -- just take the average number of upvotes, and use that as a prediction.
+  We'll also want a baseline to compare the error to to see if the results are good.  We can do this by using a simple method to make baseline estimates for the test set, and comparing the error rate of our predictions to the error rate of the baseline estimates.  One very simple baseline is to take the average number of upvotes per submission in the training set, and use that as a prediction for every submission.
   
-  We'll use [mean absolute error](http://en.wikipedia.org/wiki/Mean_absolute_error) as an error metric.  It's very simple -- just subtract the actual value from the prediction, take the absolute value, then add all the differences together and divide by the number of differences to get an average.
+  We'll use [mean absolute error](http://en.wikipedia.org/wiki/Mean_absolute_error) as an error metric.  It's very simple -- just subtract the actual value from the prediction, take the absolute value of the difference, then find the mean of all the differences.
 initial_display: |
   # We're going to use mean absolute error as an error metric.
-  # Our error is about 15.2 upvotes, which means that, on average, 
-  # our prediction is 15.2 upvotes away from the actual number of upvotes.
+  # Our error is about 12.6 upvotes, which means that, on average, 
+  # our prediction is 12.6 upvotes away from the actual number of upvotes.
   print(sum(abs(predictions - test_upvotes)) / len(predictions))
   
   # As a baseline, we'll use the average number of upvotes
   # across all submissions.
-  # The error here is 15.9 -- our estimate is better, but not hugely so.
+  # The error here is 13.6 -- our estimate is better, but not hugely so.
   # There either isn't a ton of predictive value encoded in the 
   # data we have, or we aren't extracting it well.
   average_upvotes = sum(test_upvotes)/len(test_upvotes)
@@ -503,10 +512,12 @@ name: Improvements
 type: markdown
 no_answer_needed: True
 left_text: |
-  This method worked reasonably but not stunningly well on this dataset, and the data had some predictive value.
+  This method worked reasonably but not stunningly well on this dataset.  We found that the headlines and other columns have some predictive value.
   
-  We could improve this by using a different predictive algorithm, like random forest.  We could also use ngrams, such as bigrams and trigrams, when we are generating our bag of words matrix.  We could also take other data into account, like the user who submitted the article.
+  We could improve this approach by using a different predictive algorithm, like a random forest or a neural network.  We could also use ngrams, such as bigrams and trigrams, when we are generating our bag of words matrix.  Trying a [tf-idf](http://en.wikipedia.org/wiki/Tf%E2%80%93idf) transform on the matrix could also help -- scikit-learn has a class that does this automatically.
   
-  Ultimately, all of these methods will take much longer to run than what we have so far, but will likely reduce error a bit.
+  We could also take other data into account, like the user who submitted the article, and generate features indicating things like the karma of the user, and the recent activity of the user.  Other statistics on the submitted url, like the average number of upvotes submissions from that url received would also be potentially useful.  Be careful when doing these to only take into account information that existed before the submission you're predicting for was made.
+  
+  All of these additions will take much longer to run than what we have so far, but will reduce error.  Hopefully you'll have some time to try them out!
 
 --------
