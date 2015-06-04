@@ -211,9 +211,9 @@ vars:
 --------
 
 name: Looking at the data
-type: markdown
+type: text
 no_answer_needed: True
-left_text: |
+text: |
   We'll be looking at a dataset consisting of submissions to [Hacker News](http://news.ycombinator.com) from 2006 to 2015.  The data was taken from [here](https://github.com/arnauddri/hn).  Arnaud Drizard used the Hacker News API to scrape it.  We've sampled `30000` rows from the data randomly, and removed all the extraneous columns.  Our data only has four columns:
   
   * `submission_time` -- when the story was submitted.
@@ -509,9 +509,9 @@ initial_vars: 9
 --------
 
 name: Improvements
-type: markdown
+type: text
 no_answer_needed: True
-left_text: |
+text: |
   This method worked reasonably but not stunningly well on this dataset.  We found that the headlines and other columns have some predictive value.
   
   We could improve this approach by using a different predictive algorithm, like a random forest or a neural network.  We could also use ngrams, such as bigrams and trigrams, when we are generating our bag of words matrix.  Trying a [tf-idf](http://en.wikipedia.org/wiki/Tf%E2%80%93idf) transform on the matrix could also help -- scikit-learn has a class that does this automatically.
